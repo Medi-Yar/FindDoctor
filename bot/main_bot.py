@@ -13,12 +13,10 @@ from langgraph.checkpoint.mongodb import MongoDBSaver
 
 
 def build_chatbot_app(
-    mongodb_client,
-    logger,
     llm_model,
     list_of_tools,
 ):
-    checkpointer = MongoDBSaver(mongodb_client)
+    # checkpointer = memorySaver()
 
     warnings.filterwarnings('ignore')
 
@@ -34,6 +32,7 @@ def build_chatbot_app(
     def call_model(state):
 
         system_message = f"""
+        
             """
         
 

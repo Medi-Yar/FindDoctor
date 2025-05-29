@@ -36,9 +36,6 @@ def export_conversation_history_to_string(
         if not isinstance(msg, SystemMessage)
     )
 
-class RetrieveContextInputs(BaseModel):
-    question: str = Field(description="Query")
-
 
 class ExpertEnum(str, Enum):
     CARDIOLOGIST = "cardiologist"
@@ -55,8 +52,8 @@ class DiagnoseOutputClass(BaseModel):
 
 
 structured_llm = llm_model.with_structured_output(DiagnoseOutputClass)
-@tool("diagnose_patient", args_schema=RetrieveContextInputs)
-def context_retriever(state: Annotated[dict, InjectedState],):
+@tool("diagnose_patient")
+def diagnose_patient(state: Annotated[dict, InjectedState],):
     """
     Diganose patient and choose wath expertise is needed for this patient to be refered to.
     
