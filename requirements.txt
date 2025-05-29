@@ -3,3 +3,5 @@ pydantic
 langchain-openai
 langchain-community
 chainlit
+langgraph-cli
+python-dotenv
