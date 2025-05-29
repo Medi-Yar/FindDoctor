@@ -17,6 +17,9 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, System
 from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
+from typing import Optional, List, Literal
+from pydantic import BaseModel, Field
+
 
 load_dotenv()
 
@@ -27,10 +30,40 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 from paziresh24_interface.paziresh24_utils import get_doctor_list, get_doctor_details, async_get_doctor_details
 
 
+class FindDoctorInputSchema(BaseModel):
+    """Schema to get a list of doctors based on various filters."""
+    
+    text: Optional[str] = Field(None, description="Search text (symptom, disease, or expertise)")
+    
+    city: Literal["abbar", "abadan", "abadeh", "abdanan", "abegarm", "abyek", "azarshahr", "aran-va-bidgol", "azadshahr", "asara", "astara", "astaneh-ye-ashrafiyeh", "ashtian", "ashkhaneh", "aghajari", "aq-qala", "amol", "avej", "abarkooh", "abu-musa", "abhar", "arak", "ardabil", "ardestān", "ardakan", "ardakan-fars", "ardal", "arsenjan", "orumieh", "azna", "estahban", "asadabad", "esfarāyen", "osku", "eslamabad-e-gharb", "eslamshahr", "eshtehard", "ashkezar", "oshnavieh", "isfahan", "eghlid", "aleshtar", "alvand", "aligudarz", "amlash", "omidiyeh", "anar", "andisheh", "andimeshk", "gouharan", "ahar", "ahram", "ahvaz", "ijrud", "izeh", "iranshahr-khuzestan", "iranshahr", "ilam", "ilkhchi", "iwan", "eyvanakey", "bab-anar", "babak", "babol", "babolsar", "basmenj", "basht", "baghbahadoran", "baghmalek", "baft", "bafgh", "baghershahr", "baneh", "bajestan", "bojnurd", "borazjan", "bord-khun", "bardaskan", "bardsir", "borujerd", "borujen", "bostanabad", "bastak", "bastam", "boshruyeh", "baladeh", "bam", "bonab", "bandar-imam-khomeini", "bandar-e-jask", "bandar-khamir", "kiashahr", "bandar-gaz", "bandar-lengeh", "bandar-mahshahr", "bandar-anzali", "bandar-abbas", "bavanat", "buin-zahra", "bushehr", "bukan", "boomehen", "bahar", "behbahan", "behshahr", "bijar", "birjand", "beyza", "bileh-savar", "parsabad", "parsian", "pasargad", "pakdasht", "pave", "pol-sefid", "pol-dokhtar", "poldasht", "piranshahr", "takestan", "talesh", "taybad", "tabriz", "tajrish", "torbat-e-jam", "torbat-heydariyeh", "torkaman", "tasuj", "taft", "tafresh", "takab", "tonekabon", "tangestan", "tuyserkan", "tehran", "tiran", "jajarm", "jolfa", "jam", "javanrud", "juybar", "jahrom", "jiroft", "chabahar", "chadegan", "chaldoran", "chalus", "qarah-ziyaeddin", "chelgerd", "chenaran", "chahar-dangeh", "haji-abad", "haji-abad-isfahan", "haji-abad-fars", "hasan-abad", "hamidiyeh", "hamidiyeh-shahr", "kharg", "khash", "khodabandeh", "kharameh", "khorramabad", "khorrambid", "khorramdarreh", "khorramshahr", "khosroshahr", "khoshkebijar", "khalkhal", "khomam", "khomein", "khomeini-shahr", "khonj", "khaf", "khansar", "khormoj", "khoy", "darab", "damghan", "dorcheh", "dargaz", "darmiyan", "darreh-shahr", "dezful", "dezful-lorestan", "dashtestan", "dashti", "delijan", "damavand", "dana", "dorud", "dogonbadan", "dowlatabad", "dehaghan", "dehbārez", "dehdasht", "dehloran", "dayyer", "bandar-deylam", "divandarreh", "rask", "ramsar", "ramshir", "ramhormoz", "ramian", "ravar", "robat-karim", "razan", "rasht", "rezvanshahr", "rafsanjan", "ravansar", "rudsar", "rudbar", "roodehen", "shahr-e-rey", "zabol", "zarch", "zahedan", "zarghan", "zarand", "zarinabad", "zarinshahr", "zanjan", "sari", "saman", "saveh", "sabzevar", "sepidan", "sarpol-zahab", "sardasht", "sarab", "sarableh", "saravan", "sarbaz", "sarbishe", "sarakhs", "sarein", "sarvestan", "saqqez", "salmas", "salmanshahr", "semnan", "semirom", "sonqor", "sanandaj", "savadkuh", "surian", "susangerd", "sahand", "sisakht", "siahkal", "sirjan", "sirik", "siah-cheshmeh", "shadegan", "shazand", "shandiz", "shahediyeh", "shahroud", "shahin-dej", "shahin-shahr", "shabestar", "sharifabad", "shaft", "shush", "shushtar", "showt", "shahreza", "shahrekord", "shahriar", "shiraz", "shirvan", "sahneh", "safashahr", "someh-sara", "tarom", "taleqan", "tabas", "tabas-masina", "tabas-yazd", "torghabeh", "ajabshir", "asaluyeh", "alavijeh", "aliabad-e-katul", "farsan", "faruj", "famenin", "farashband", "ferdows", "fereidan", "fereydun-shahr", "fereydunkenar", "fariman", "fasa", "fasham", "felard", "falavarjan", "fooladshahr", "fooman", "firuzabad", "firuzkuh", "firooze", "qaemshahr", "ghaemiyeh", "ghayen", "qaderabad", "qods", "qarchak", "qorveh", "ghareaghaj", "qazvin", "qeshm", "qasr-e-shirin", "qom", "ghochan", "qohestan", "qeydar", "ghirokarzin", "kazeroon", "kashan", "kashmar", "kaki", "kamyaran", "kabudrahang", "karaj", "kordkuy", "kerman", "kermanshah", "kalat-nader", "kelachay", "kalaleh", "kaleybar", "kan", "kandovan", "bandar-e-kangan", "kangavar", "kavar", "kosar", "kouhbanan", "kuhpayeh", "kuhdasht", "kahrizak", "kahnooj", "kiar", "kish", "kivi", "gachsaran", "gerash", "gorgan", "garmsar", "garmeh", "germi", "golpayegan", "gonabad", "bandar-ganaveh", "gonbad-kavus", "gohardasht", "gilan-gharb", "lar", "lali", "lamerd", "lahijan", "lordegan", "lasht-e-nesha", "langarud", "lavasan", "likak", "masal", "masuleh", "maku", "mahdasht", "mahshahr", "mahneshan", "mobarakeh", "mahalat", "mohammadieh", "mahmudabad", "maragheh", "marand", "marvdasht", "mariwan", "masjed-soleiman", "meshkindasht", "meshgin-shahr", "mashhad", "mollasani", "malard", "malayer", "malekan", "mamasani", "mamaghan", "manjil", "mahabad", "mehr", "mehran", "mehriz", "qoshachay", "mianeh", "meybod", "mirjaveh", "minab", "minudasht", "naein", "najafabad", "natanz", "nazarabad", "naqadeh", "neka", "namin", "nur", "nourabad", "nurabad", "nowshahr", "nahavand", "nehbandan", "neyriz", "nir", "neyshabur", "nikshahr", "varamin", "varzeghan", "varzaneh", "hadishahr", "herat", "harsin", "heris", "hashtpar", "hashtrood", "hashtgerd", "hamedan", "hendijan", "hoveyzeh", "yasuj", "yazd"] = Field("tehran", description='City to get the doctor list from')
+    
+    expertise: Optional[Literal["orthopedics", "obstetrics-gynecology", "ophthalmology", "gastroenterology", "urology", "endocrinology", "cardiovascular", "internal", "dental-oral", "dermatology", "surgery", "pediatrics", "psychiatry", "pulmonology", "otorhinolaryngology", "general-practitioner", "corona-virus", "rehabilitation", "anesthesia-and-intensive-care", "nutrition", "neurology", "psychology", "palliative-care", "infectious", "beauty", "oncology", "imaging", "diabetes", "pharmacology", "traditional-medicine", "genetics", "allergies", "laboratory-and-imaging", "emergency-medicine", "sexual-health"]] = Field(None, description='Doctor\'s expertise')
+    sub_expertise: Optional[str] = Field(None, description="Doctor's sub-expertise to filter by")
+    
+    results_type: Optional[Literal["پزشکان بیمارستانی", "پزشکان مطبی", "فقط پزشکان"]] = Field(
+        None, description='Type of results to get ("پزشکان بیمارستانی", "پزشکان مطبی", "فقط پزشکان")'
+    )
+    
+    doctor_gender: Optional[Literal["male", "female"]] = Field(None, description='Doctor gender ("male", "female")')
+    
+    degree: Optional[
+        Literal["فلوشیپ", "فوق تخصص", "دکترای تخصصی", "متخصص", "دکترای", "کارشناس ارشد", "کارشناس"]
+    ] = Field(None, description="Doctor's degree to filter by")
+    
+    turn_type: Optional[Literal["non-consult", "consult"]] = Field(None, description='Type of appointment ("non-consult", "consult")')
+    
+    good_behave_doctor: Optional[bool] = Field(None, description="Filter by good-behaving doctors")
+    popular_doctor: Optional[bool] = Field(None, description="Filter by popular doctors")
+    less_waiting_time_doctor: Optional[bool] = Field(None, description="Filter by doctors with less waiting time")
+    has_prescription: Optional[bool] = Field(None, description="Filter by doctors who can give prescriptions")
+    
+    work_time_frames: Optional[List[Literal["night", "afternoon", "morning"]]] = Field(
+        None, description="Time frames the doctor works (night, afternoon, morning)"
+    )
 
-@tool
+@tool("find_doctor_tool", args_schema=FindDoctorInputSchema)
 def find_doctor(text=None, 
-                    city="tehran", 
+                    city=None, 
                     expertise=None, 
                     sub_expertise=None, 
                     results_type=None, 
@@ -42,24 +75,9 @@ def find_doctor(text=None,
                     less_waiting_time_doctor=None,
                     has_prescription=None,
                     work_time_frames=None):
-    """
-    Get the list of doctors in a specific city.
-    :param text: The search text (symptom, disease or expertise)
-    :param city: The city to get the doctor list from.
-    :param expertise: The expertise of doctors to filter by.
-    :param sub_expertise: The sub-expertise of doctors to filter by.
-    :param results_type: The type of results to get ("پزشکان بیمارستانی", "پزشکان مطبی", "فقط پزشکان")
-    :param doctor_gender: The gender of doctors to filter by ("male", "female")
-    :param degree: The degree of doctors to filter by ("فلوشیپ", "فوق تخصص", "دکترای تخصصی", "متخصص", "دکترای", "کارشناس ارشد", "کارشناس")
-    :param turn_type: (non-consult, consult)
-    :param good_behave_doctor: true if you want to filter by good behave doctors, false otherwise.
-    :param popular_doctor: true if you want to filter by popular doctors, false otherwise.
-    :param less_waiting_time_doctor: true if you want to filter by doctors with less waiting time, false otherwise.
-    :param has_prescription: true if you want to filter by doctors who have prescription, false otherwise.
-    :param work_time_frames: The work time frames of doctors to filter by. (night, afternoon, morning)
-    """
+    
     return get_doctor_list(text,
-                           "tehran",
+                           city,
                            expertise,
                            sub_expertise,
                            results_type,
@@ -135,7 +153,7 @@ class ExpertEnum(str, Enum):
 class DiagnoseOutputClass(BaseModel):
     is_data_enough_for_initiall_diagnosis : bool = Field(..., description="")
     possible_diseases: list[str] = Field(..., description = "list of possible diseases")
-    expert: ExpertEnum = Field(..., description = "which expert is the best to refer to")
+    expertise: Optional[Literal["orthopedics", "obstetrics-gynecology", "ophthalmology", "gastroenterology", "urology", "endocrinology", "cardiovascular", "internal", "dental-oral", "dermatology", "surgery", "pediatrics", "psychiatry", "pulmonology", "otorhinolaryngology", "general-practitioner", "corona-virus", "rehabilitation", "anesthesia-and-intensive-care", "nutrition", "neurology", "psychology", "palliative-care", "infectious", "beauty", "oncology", "imaging", "diabetes", "pharmacology", "traditional-medicine", "genetics", "allergies", "laboratory-and-imaging", "emergency-medicine", "sexual-health"]] = Field(None, description='which expert is the best to refer to')
 
 
 structured_llm = llm_model.with_structured_output(DiagnoseOutputClass)
