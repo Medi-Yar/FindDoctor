@@ -28,7 +28,7 @@ async def on_message(msg: cl.Message):
     for msg, metadata in graph.stream({"messages": [HumanMessage(content=msg.content)]}, stream_mode="messages", config=RunnableConfig(callbacks=[cb], **config)):
         if (
             msg.content
-            and not isinstance(msg, HumanMessage) and not isinstance(msg, ToolMessage)
+            and not isinstance(msg, HumanMessage) and metadata["langgraph_node"] == "assistant"
         ):
             await final_answer.stream_token(msg.content)
 

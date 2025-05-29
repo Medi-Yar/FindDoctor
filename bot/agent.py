@@ -184,8 +184,8 @@ builder.add_conditional_edges(
 )
 builder.add_edge("tools", "assistant")
 react_graph_no_memory = builder.compile()
-# checkpointer = InMemorySaver()
-# react_graph_memory = builder.compile(checkpointer=checkpointer)
+checkpointer = InMemorySaver()
+react_graph_memory = builder.compile(checkpointer=checkpointer)
 
 
 
