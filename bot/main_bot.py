@@ -53,8 +53,6 @@ def build_chatbot_app(
             ai_message = messages[-1]
             if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
                 return "tools"
-            if len(messages) > 12:
-                return "summarize_conversation"
             return END
     class BasicToolNode:
         """A node that runs the tools requested in the last AIMessage."""
@@ -98,10 +96,9 @@ def build_chatbot_app(
     workflow.add_conditional_edges(
         "conversation",
         should_continue,
-        {"tools": "tools", "summarize_conversation": "summarize_conversation", END: END},
+        {"tools": "tools", END: END},
     )
     workflow.add_edge("tools", "conversation")
-    workflow.add_edge("summarize_conversation", END)
 
     # Compile and return the multi-agent RAG app
     return workflow.compile(checkpointer=checkpointer)
