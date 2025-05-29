@@ -13,6 +13,7 @@ from langchain_core.messages import ToolMessage
 from bot.agent_tools import find_doctor, diagnose_patient
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
+from langgraph.checkpoint.memory import InMemorySaver
 import os
 
 load_dotenv()
@@ -183,6 +184,8 @@ builder.add_conditional_edges(
 )
 builder.add_edge("tools", "assistant")
 react_graph_no_memory = builder.compile()
+# checkpointer = InMemorySaver()
+# react_graph_memory = builder.compile(checkpointer=checkpointer)
 
 
 

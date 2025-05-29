@@ -106,7 +106,54 @@ def get_doctor_list(text=None,
     if script_tag:
         script_content = script_tag.string
         data = json.loads(script_content)
+    data = data.get("props", {}).get("pageProps", {}).get("dehydratedState", {}).get("queries", [{}])[0].get("state", {}).get("data", {}).get("search", {}).get("result", [])
+    data = simplify_doctor_data(data)
     return data
     
+def simplify_doctor_data(data):
+    simplified_doctors = []
 
+    for doctor in data:
+        # Basic fields
+        name = doctor.get("title", "")
+        prefix = doctor.get("prefix", "")
+        full_name = f"{prefix} {name}".strip()
+        expertise = doctor.get("display_expertise", "")
+        experience = doctor.get("experience", 0)
+        satisfaction = doctor.get("satisfaction", 0)
+        rating = doctor.get("rate_info", {}).get("rate", None)
+        rates_count = doctor.get("rates_count", 0)
+        visit_count = doctor.get("number_of_visits", 0)
+        address = doctor.get("display_address", "")
+        booking_available = doctor.get("consult_active_booking", False)
+
+        # Online visit action (if available)
+        actions = doctor.get("actions", [])
+        online_visit_url = None
+        appointment_time = None
+        for action in actions:
+            if "ویزیت آنلاین" in action.get("title", ""):
+                online_visit_url = action.get("url")
+            if "نوبت‌دهی" in action.get("title", ""):
+                # Extract first appointment time if available
+                top_title = action.get("top_title", "")
+                if "اولین نوبت" in top_title:
+                    appointment_time = top_title.replace("<span>", "").replace("</span>", "").strip()
+
+        simplified_doctors.append({
+            "full_name": full_name,
+            "title": prefix,
+            "expertise_summary": expertise,
+            "experience_years": experience,
+            "satisfaction_percent": satisfaction,
+            "rating": rating,
+            "number_of_ratings": rates_count,
+            "visit_count": visit_count,
+            "address": address,
+            "online_booking_available": booking_available,
+            "first_appointment_time": appointment_time,
+            "online_visit_url": online_visit_url
+        })
+
+    return simplified_doctors
     
