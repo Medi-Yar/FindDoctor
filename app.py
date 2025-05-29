@@ -1,3 +1,4 @@
+import os
 from typing import Literal
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -7,9 +8,14 @@ from langchain_core.messages import HumanMessage
 
 import chainlit as cl
 from bot.main_bot import build_chatbot_app
+from dotenv import load_dotenv
 
+load_dotenv()
 
-model = ChatOpenAI(model_name="google/gemini-2.5-flash-preview", openai_api_base="https://openrouter.ai/api/v1", openai_api_key="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", temperature=0)
+LLM_BASE_URL = os.getenv("LLM_BASE_URL")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+model = ChatOpenAI(model_name="google/gemini-2.5-flash-preview", openai_api_base=LLM_BASE_URL, openai_api_key=OPENROUTER_API_KEY, temperature=0)
 
 graph = build_chatbot_app(model, [])
 

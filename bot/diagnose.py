@@ -1,3 +1,4 @@
+import os
 from typing import Literal, Annotated
 from pydantic import BaseModel, Field
 from langchain.tools import tool
@@ -9,14 +10,20 @@ from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage, RemoveMessage, ToolMessage, HumanMessage
 from langgraph.graph import MessagesState, StateGraph, START, END
-from langgraph.checkpoint.mongodb import MongoDBSaver
+# from langgraph.checkpoint.mongodb import MongoDBSaver
 from langgraph.prebuilt import InjectedState
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
+from dotenv import load_dotenv
+
+from langchain_openai import ChatOpenAI
+
+load_dotenv()
 
 
-from langchain_openai import ChatOpenAi
+LLM_BASE_URL = os.getenv("LLM_BASE_URL")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-llm_model = ChatOpenAi(name="gpt-4.1-mini")
+llm_model = ChatOpenAI(model_name="google/gemini-2.5-flash-preview", openai_api_base=LLM_BASE_URL, openai_api_key=OPENROUTER_API_KEY, temperature=0)
 
 
 def export_conversation_history_to_string(
