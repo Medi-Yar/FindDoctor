@@ -9,9 +9,9 @@ from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage, RemoveMessage, ToolMessage, HumanMessage
 from langgraph.graph import MessagesState, StateGraph, START, END
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.memory import MemorySaver
 
-checkpointer = InMemorySaver()
+checkpointer = MemorySaver()
 
 
 def build_chatbot_app(
