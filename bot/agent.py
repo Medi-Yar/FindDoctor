@@ -23,7 +23,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 # Initialize model with tool support
 # model = ChatOpenAI(model="gpt-4o", temperature=0)
 model = ChatOpenAI(
-    model_name="openai/gpt-4.1",
+    model_name="openai/gpt-4.1-mini",
     openai_api_base=LLM_BASE_URL,
     openai_api_key=OPENROUTER_API_KEY,
     temperature=0.2,
