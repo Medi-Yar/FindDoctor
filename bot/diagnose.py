@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from langchain.tools import tool
 import warnings
 import json
-from typing import Literal
+from typing import Literal, List
 from enum import Enum
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
