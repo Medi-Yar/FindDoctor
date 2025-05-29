@@ -1,3 +1,5 @@
 langgraph
 pydantic
 langchain-openai
+langchain-community
+chainlit

@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage, RemoveMessage, ToolMessage, HumanMessage
 from langgraph.graph import MessagesState, StateGraph, START, END
-from langgraph.checkpoint.mongodb import MongoDBSaver
+from langgraph.checkpoint.memory import InMemorySaver
+
+checkpointer = InMemorySaver()
 
 
 def build_chatbot_app(
@@ -32,7 +34,11 @@ def build_chatbot_app(
     def call_model(state):
 
         system_message = f"""
-        
+                You are a great medical Assistant. You will help user find a suitable doctor to help them with their ailements.
+                You should try to diagnose the sickness (and relevant medical expertise) first, unless user says what kind of doctor they need.
+                You should ask follow up questions if your try at diagnoses fails.
+                You should search for a suitable doctor according to the user's need
+                You should Search again if user doesn't want the recommended doctor
             """
         
 
@@ -76,7 +82,6 @@ def build_chatbot_app(
                         )
                     )
                 except Exception as e:
-                    logger.error(f"An error occurred: {e}")
                     outputs.append(
                         ToolMessage(
                             content=json.dumps({"error": "Could Not Retrieve. Try Again."}, ensure_ascii=False),
@@ -87,7 +92,7 @@ def build_chatbot_app(
             return {"messages": outputs, "used_tool": tool_call["name"]}
 
     workflow = StateGraph(MessagesState)
-    workflow.add_node("tools", BasicToolNode(tools=[context_retriever]))
+    workflow.add_node("tools", BasicToolNode(tools=list_of_tools))
     workflow.add_node("conversation", call_model)
     workflow.add_edge(START, "conversation")
     workflow.add_conditional_edges(
