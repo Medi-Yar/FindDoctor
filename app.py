@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage
 import chainlit as cl
 from bot.main_bot import build_chatbot_app
 from dotenv import load_dotenv
+from bot.agent import react_graph_no_memory
 
 load_dotenv()
 
@@ -17,7 +18,8 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 model = ChatOpenAI(model_name="google/gemini-2.5-flash-preview", openai_api_base=LLM_BASE_URL, openai_api_key=OPENROUTER_API_KEY, temperature=0)
 
-graph = build_chatbot_app(model, [])
+# graph = build_chatbot_app(model, [])
+graph = react_graph_no_memory
 
 from typing import Annotated
 from typing_extensions import TypedDict

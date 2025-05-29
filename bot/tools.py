@@ -1,0 +1,178 @@
+from langchain_core.tools import tool, InjectedToolCallId
+import os
+from typing import Literal, Annotated
+from pydantic import BaseModel, Field
+from langchain.tools import tool
+import warnings
+import json
+from typing import Literal, List
+from enum import Enum
+from pydantic import BaseModel, Field
+from langchain_core.tools import tool
+from langchain_core.messages import SystemMessage, RemoveMessage, ToolMessage, HumanMessage
+from langgraph.graph import MessagesState, StateGraph, START, END
+# from langgraph.checkpoint.mongodb import MongoDBSaver
+from langgraph.prebuilt import InjectedState
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
+from dotenv import load_dotenv
+
+from langchain_openai import ChatOpenAI
+
+load_dotenv()
+
+
+LLM_BASE_URL = os.getenv("LLM_BASE_URL")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+from paziresh24_interface.paziresh24_utils import get_doctor_list, get_doctor_details, async_get_doctor_details
+
+
+
+@tool
+def find_doctor(text=None, 
+                    city="tehran", 
+                    expertise=None, 
+                    sub_expertise=None, 
+                    results_type=None, 
+                    doctor_gender=None, 
+                    degree=None, 
+                    turn_type=None, 
+                    good_behave_doctor=None, 
+                    popular_doctor=None,
+                    less_waiting_time_doctor=None,
+                    has_prescription=None,
+                    work_time_frames=None):
+    """
+    Get the list of doctors in a specific city.
+    :param text: The search text (symptom, disease or expertise)
+    :param city: The city to get the doctor list from.
+    :param expertise: The expertise of doctors to filter by.
+    :param sub_expertise: The sub-expertise of doctors to filter by.
+    :param results_type: The type of results to get ("پزشکان بیمارستانی", "پزشکان مطبی", "فقط پزشکان")
+    :param doctor_gender: The gender of doctors to filter by ("male", "female")
+    :param degree: The degree of doctors to filter by ("فلوشیپ", "فوق تخصص", "دکترای تخصصی", "متخصص", "دکترای", "کارشناس ارشد", "کارشناس")
+    :param turn_type: (non-consult, consult)
+    :param good_behave_doctor: true if you want to filter by good behave doctors, false otherwise.
+    :param popular_doctor: true if you want to filter by popular doctors, false otherwise.
+    :param less_waiting_time_doctor: true if you want to filter by doctors with less waiting time, false otherwise.
+    :param has_prescription: true if you want to filter by doctors who have prescription, false otherwise.
+    :param work_time_frames: The work time frames of doctors to filter by. (night, afternoon, morning)
+    """
+    return get_doctor_list(text,
+                           "tehran",
+                           expertise,
+                           sub_expertise,
+                           results_type,
+                           doctor_gender,
+                           degree,
+                           turn_type,
+                           good_behave_doctor,
+                           popular_doctor,
+                           less_waiting_time_doctor,
+                           has_prescription,
+                           work_time_frames)
+
+
+
+llm_model = ChatOpenAI(model_name="google/gemini-2.5-flash-preview-05-20", openai_api_base=LLM_BASE_URL, openai_api_key=OPENROUTER_API_KEY, temperature=0)
+
+
+def export_conversation_history_to_string(
+    messages: List[SystemMessage],
+) -> str:
+    return "\n".join(
+        (
+            f"User: {msg.content}"
+            if isinstance(msg, HumanMessage)
+            else f"Assistant: {msg.content}"
+            if isinstance(msg, AIMessage)
+            else f"ToolMessage called {msg.name}: [context]"
+            if isinstance(msg, ToolMessage)
+            else ""
+        )
+        for msg in messages
+        if not isinstance(msg, SystemMessage)
+    )
+
+
+class ExpertEnum(str, Enum):
+    ORTHOPEDICS = "orthopedics"
+    OBSTETRICS_GYNECOLOGY = "obstetrics-gynecology"
+    OPHTHALMOLOGY = "ophthalmology"
+    GASTROENTEROLOGY = "gastroenterology"
+    UROLOGY = "urology"
+    ENDOCRINOLOGY = "endocrinology"
+    CARDIOVASCULAR = "cardiovascular"
+    INTERNAL = "internal"
+    DENTAL_ORAL = "dental-oral"
+    DERMATOLOGY = "dermatology"
+    SURGERY = "surgery"
+    PEDIATRICS = "pediatrics"
+    PSYCHIATRY = "psychiatry"
+    PULMONOLOGY = "pulmonology"
+    OTORHINOLARYNGOLOGY = "otorhinolaryngology"
+    GENERAL_PRACTITIONER = "general-practitioner"
+    CORONA_VIRUS = "corona-virus"
+    REHABILITATION = "rehabilitation"
+    ANESTHESIA_AND_INTENSIVE_CARE = "anesthesia-and-intensive-care"
+    NUTRITION = "nutrition"
+    NEUROLOGY = "neurology"
+    PSYCHOLOGY = "psychology"
+    PALLIATIVE_CARE = "palliative-care"
+    INFECTIOUS = "infectious"
+    BEAUTY = "beauty"
+    ONCOLOGY = "oncology"
+    IMAGING = "imaging"
+    DIABETES = "diabetes"
+    PHARMACOLOGY = "pharmacology"
+    TRADITIONAL_MEDICINE = "traditional-medicine"
+    GENETICS = "genetics"
+    ALLERGIES = "allergies"
+    LABORATORY_AND_IMAGING = "laboratory-and-imaging"
+    EMERGENCY_MEDICINE = "emergency-medicine"
+    SEXUAL_HEALTH = "sexual-health"
+
+class DiagnoseOutputClass(BaseModel):
+    is_data_enough_for_initiall_diagnosis : bool = Field(..., description="")
+    possible_diseases: list[str] = Field(..., description = "list of possible diseases")
+    expert: ExpertEnum = Field(..., description = "which expert is the best to refer to")
+
+
+structured_llm = llm_model.with_structured_output(DiagnoseOutputClass)
+@tool("diagnose_patient")
+def diagnose_patient(state: Annotated[dict, InjectedState],):
+    """
+    Diganose patient and choose wath expertise is needed for this patient to be refered to.
+    
+    Call this agent to diagnose the patient.
+    """
+    try:
+        #For all key - value in the state["profile"] concat in way "key" - "value"
+        profile = "\n".join(
+            f"{key}: {value}" for key, value in state.get("profile", {}).items()
+        )
+        msgs = export_conversation_history_to_string(state["messages"])
+        system_prompt = f"""
+        You are a highly knowledgeable and responsible virtual medical assistant.
+        Your task is to assist with **preliminary (initial) diagnosis** based on the user's described symptoms and history.
+
+        **Important Guidelines:**
+        - Your diagnosis is **NOT a final or official medical diagnosis**.
+        - Your assessment is ONLY meant to help select the most appropriate medical specialist (e.g., cardiologist, neurologist, dermatologist, etc.) for the user’s next step.
+        - DO NOT provide any treatment, medication, or emergency advice.
+        - If the user's description is insufficient for even a preliminary assessment, clearly state that more information is needed and set `"is_data_enough_for_initiall_diagnosis": false`.
+        - If the description is sufficient, set `"is_data_enough_for_initiall_diagnosis": true`, list the most likely possible diseases (as a shortlist, not a definitive answer), and select the most suitable specialist to refer to (from the allowed list).
+        
+        This is the profile that we have from the user:
+        {profile}
+
+        Use only the information provided in the user's messages and history. If anything is unclear or missing, ask for clarification (if you are allowed), or indicate that data is not enough.
+"""
+        sys_msg = SystemMessage(content=system_prompt)
+        user_msg = HumanMessage(content=msgs)
+
+        results = structured_llm.invoke([sys_msg,user_msg])
+        
+        return {"tool_answer": results.model_dump()}
+    except Exception as e:
+        return {"error": "من درحال حاضر به اطلاعات دسترسی ندارم"}
