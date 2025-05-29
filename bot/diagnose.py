@@ -11,11 +11,30 @@ from langchain_core.messages import SystemMessage, RemoveMessage, ToolMessage, H
 from langgraph.graph import MessagesState, StateGraph, START, END
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from langgraph.prebuilt import InjectedState
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
+
 
 from langchain_openai import ChatOpenAi
 
 llm_model = ChatOpenAi(name="gpt-4.1-mini")
 
+
+def export_conversation_history_to_string(
+    messages: List[SystemMessage],
+) -> str:
+    return "\n".join(
+        (
+            f"User: {msg.content}"
+            if isinstance(msg, HumanMessage)
+            else f"Assistant: {msg.content}"
+            if isinstance(msg, AIMessage)
+            else f"ToolMessage called {msg.name}: [context]"
+            if isinstance(msg, ToolMessage)
+            else ""
+        )
+        for msg in messages
+        if not isinstance(msg, SystemMessage)
+    )
 
 class RetrieveContextInputs(BaseModel):
     question: str = Field(description="Query")
@@ -30,6 +49,7 @@ class ExpertEnum(str, Enum):
     PSYCHIATRIST = "psychiatrist"
 
 class DiagnoseOutputClass(BaseModel):
+    is_data_enough_for_initiall_diagnosis = bool = Field(..., description="")
     possible_diseases: list[str] = Field(..., description = "list of possible diseases")
     expert: ExpertEnum = Field(..., description = "which expert is the best to refer to")
 
@@ -43,11 +63,31 @@ def context_retriever(state: Annotated[dict, InjectedState],):
     Call this agent to diagnose the patient.
     """
     try:
+        #For all key - value in the state["profile"] concat in way "key" - "value"
+        profile = "\n".join(
+            f"{key}: {value}" for key, value in state.get("profile", {}).items()
+        )
+        msgs = export_conversation_history_to_string(state["messages"])
         system_prompt = f"""
-        You are a real good doctor that can tell the sickness and who to refer to. help the user.
-        """
+        You are a highly knowledgeable and responsible virtual medical assistant.
+        Your task is to assist with **preliminary (initial) diagnosis** based on the user's described symptoms and history.
 
-        results = structured_llm.invoke(system_prompt + state["messages"] + HumanMessage("Can You Tell me my diagnoses?"))
+        **Important Guidelines:**
+        - Your diagnosis is **NOT a final or official medical diagnosis**.
+        - Your assessment is ONLY meant to help select the most appropriate medical specialist (e.g., cardiologist, neurologist, dermatologist, etc.) for the user’s next step.
+        - DO NOT provide any treatment, medication, or emergency advice.
+        - If the user's description is insufficient for even a preliminary assessment, clearly state that more information is needed and set `"is_data_enough_for_initiall_diagnosis": false`.
+        - If the description is sufficient, set `"is_data_enough_for_initiall_diagnosis": true`, list the most likely possible diseases (as a shortlist, not a definitive answer), and select the most suitable specialist to refer to (from the allowed list).
+        
+        This is the profile that we have from the user:
+        {profile}
+
+        Use only the information provided in the user's messages and history. If anything is unclear or missing, ask for clarification (if you are allowed), or indicate that data is not enough.
+"""
+        sys_msg = SystemMessage(content=system_prompt)
+        user_msg = HumanMessage(content=msgs)
+
+        results = structured_llm.invoke([sys_msg,user_msg])
         
         return {"tool_answer": results.model_dump()}
     except Exception as e:
