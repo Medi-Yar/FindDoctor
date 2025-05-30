@@ -3,20 +3,37 @@ import requests
 import aiohttp
 from bs4 import BeautifulSoup
 
+def retry_request(url, max_retry=3):
+    while max_retry > 0:
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response
+            else:
+                print(f"Request failed with status code {response.status_code}. Retrying...")
+        except requests.RequestException as e:
+            print(f"Request failed: {e}. Retrying...")
+        max_retry -= 1
+
 def get_doctor_details(url):
     if url.startswith('/dr/'):
         url = f"https://www.paziresh24.com{url}"
-        
-    response = requests.get(url)
+    
+
+    response = retry_request(url)
 
     soup = BeautifulSoup(response.text, 'html.parser')
 
-
+    
     script_tag = soup.find('script', id='__NEXT_DATA__')
     if script_tag:
         script_content = script_tag.string
         data = json.loads(script_content)
+        data = simplify_single_doctor_data(data)
+    else:
+        data = {}
     return data
+
 
 async def async_get_doctor_details(url):
     if url.startswith('/dr/'):
@@ -30,6 +47,7 @@ async def async_get_doctor_details(url):
             if script_tag:
                 script_content = script_tag.string
                 data = json.loads(script_content)
+                data = simplify_single_doctor_data(data)
                 return data
     return None
 
@@ -152,8 +170,168 @@ def simplify_doctor_data(data):
             "address": address,
             "online_booking_available": booking_available,
             "first_appointment_time": appointment_time,
-            "online_visit_url": online_visit_url
+            "online_visit_url": online_visit_url,
+            "url": doctor.get("url", ""),
+            "id": doctor.get("id", "")
         })
 
     return simplified_doctors
     
+
+
+def simplify_single_doctor_data(raw: dict) -> dict:
+    """
+    Extract the key information a consumer app or page would normally show
+    from the full doctor‑profile payload that comes from the پذیرش۲۴ API.
+
+    Parameters
+    ----------
+    raw : dict
+        The full JSON object (what you pasted—`{"props": {"pageProps": …}}`).
+
+    Returns
+    -------
+    dict
+        A slimmed‑down dictionary containing:
+        • title, description  
+        • doctor (core personal & professional data)  
+        • centers (each clinic/moffice with essential contact & schedule data)  
+        • feedbacks (if the API included them)
+    """
+    # ---- helpers ----------------------------------------------------------
+    def _prune_expertise(item: dict) -> dict:
+        """Return only human‑readable parts of an expertise entry."""
+        return {
+            "degree": item.get("academic_degree", {}).get("title"),
+            "speciality": item.get("speciality", {}).get("title"),
+            "alias": item.get("alias"),
+        }
+
+    def _prune_service(svc: dict) -> dict:
+        """Return the bits a patient actually sees when booking."""
+        hours = svc.get("hours_of_work") or []
+        return {
+            "id": svc.get("id"),
+            "title": svc.get("alias_title"),
+            "price": svc.get("free_price"),
+            "duration": svc.get("duration"),
+            "hours_of_work": [
+                {
+                    "day": hw.get("day"),
+                    "from": hw.get("from"),
+                    "to": hw.get("to"),
+                }
+                for hw in hours
+            ],
+        }
+
+    def _prune_center(center: dict) -> dict:
+        """Keep the public‑facing parts of a clinic/office record."""
+        services = center.get("services") or []
+        return {
+            "id": center.get("id"),
+            "name": center.get("name"),
+            "address": center.get("address"),
+            "city": center.get("city"),
+            "province": center.get("province"),
+            "phone": center.get("display_number"),
+            "map": center.get("map"),  # includes lat / lon
+            "services": [_prune_service(s) for s in services],
+        }
+
+    # ---- main -------------------------------------------------------------
+    page = raw.get("props", {}).get("pageProps", {})
+
+    info = page.get("information", {})
+    doctor = {
+        "id": info.get("id"),
+        "display_name": info.get("display_name"),
+        "first_name": info.get("name"),
+        "last_name": info.get("family"),
+        "biography_html": info.get("biography"),
+        "biography_text": biography_html_to_text(info.get("biography")),
+        "experience_years": info.get("experience"),
+        "gender": info.get("gender"),
+        "avatar": info.get("image"),
+        "city_slug": info.get("city_en_slug"),
+        "expertises": [_prune_expertise(e) for e in info.get("expertises", [])],
+    }
+
+    slim = {
+        "title": page.get("title"),
+        "description": page.get("description"),
+        "doctor": doctor,
+        "centers": [_prune_center(c) for c in page.get("centers", [])],
+    }
+
+    # keep patient feedback / ratings if present
+    if "feedbacks" in page:
+        slim["feedbacks"] = page["feedbacks"]
+
+    return slim
+
+def biography_html_to_text(html: str) -> str:
+    """
+    Convert the raw HTML biography that comes from پذیرش۲۴ into plain text.
+
+    • Replaces <p>, <br> and similar tags with new‑lines so the text keeps its
+      paragraph structure.
+    • Strips every other tag.
+    • Unescapes HTML entities (&amp;, &nbsp;, …).
+    • Collapses repeated whitespace.
+
+    Parameters
+    ----------
+    html : str
+        The `information["biography"]` field (may be None).
+
+    Returns
+    -------
+    str
+        A plain‑text version of the biography. Empty string if `html` is falsy.
+    """
+    if not html:
+        return ""
+
+    # ------------------------------------------------------------
+    # 1️⃣  Preferred path – BeautifulSoup (cleaner handling)
+    # ------------------------------------------------------------
+    try:
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Replace <br> and block tags with newline hints before text extraction
+        for br in soup.select("br"):
+            br.replace_with("\n")
+        for p in soup.select("p"):
+            # Keep the text of <p> but ensure paragraph break afterwards
+            p.append("\n")
+
+        text = soup.get_text(separator=" ", strip=True)
+
+    # ------------------------------------------------------------
+    # 2️⃣  Fallback – regex + stdlib only
+    # ------------------------------------------------------------
+    except ModuleNotFoundError:
+        import re
+        from html import unescape
+
+        # Normalize common block‑level breaks to \n
+        html = re.sub(r"(?i)<\s*(br|/p)\s*/?>", "\n", html)
+        # Drop all remaining tags
+        text = re.sub(r"<[^>]+>", "", html)
+        # HTML entities → characters
+        text = unescape(text)
+
+    # ------------------------------------------------------------
+    # Final tidy‑up (shared)
+    # ------------------------------------------------------------
+    import re
+
+    # Collapse multiple new‑lines & spaces, keep single line breaks
+    text = re.sub(r"[ \t\r\f\v]+", " ", text)      # normalize spaces
+    text = re.sub(r"\n{3,}", "\n\n", text)          # max 1 blank line
+    text = text.strip()
+
+    return text

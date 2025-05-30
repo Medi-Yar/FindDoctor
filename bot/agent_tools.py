@@ -1,17 +1,16 @@
+import time
 from langchain_core.tools import tool, InjectedToolCallId
 import os
+import asyncio
 from typing import Literal, Annotated
 from pydantic import BaseModel, Field
 from langchain.tools import tool
-import warnings
-import json
 from typing import Literal, List
 from enum import Enum
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage, RemoveMessage, ToolMessage, HumanMessage
 from langgraph.graph import MessagesState, StateGraph, START, END
-# from langgraph.checkpoint.mongodb import MongoDBSaver
 from langgraph.prebuilt import InjectedState
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from dotenv import load_dotenv
@@ -20,14 +19,14 @@ from langchain_openai import ChatOpenAI
 from typing import Optional, List, Literal
 from pydantic import BaseModel, Field
 
+from paziresh24_interface.paziresh24_utils import get_doctor_list, get_doctor_details, async_get_doctor_details
 
 load_dotenv()
 
 
 LLM_BASE_URL = os.getenv("LLM_BASE_URL")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-
-from paziresh24_interface.paziresh24_utils import get_doctor_list, get_doctor_details, async_get_doctor_details
+llm_model = ChatOpenAI(model_name="google/gemini-2.5-flash-preview-05-20", openai_api_base=LLM_BASE_URL, openai_api_key=OPENROUTER_API_KEY, temperature=0.2)
 
 
 class FindDoctorInputSchema(BaseModel):
@@ -75,8 +74,8 @@ def find_doctor(text=None,
                     less_waiting_time_doctor=None,
                     has_prescription=None,
                     work_time_frames=None):
-    
-    return get_doctor_list(text,
+    print(123123132)
+    step1_list = get_doctor_list(text,
                            city,
                            expertise,
                            sub_expertise,
@@ -89,10 +88,69 @@ def find_doctor(text=None,
                            less_waiting_time_doctor,
                            has_prescription,
                            work_time_frames)
+    print(f"Step 1 list: {len(step1_list)}")
+    filtered_list = [item for item in step1_list if item.get("url", "")][:5]
+    
+    tasks = []
+    for doctor in filtered_list:
+        tasks.append(async_get_doctor_details(doctor["url"]))
+    # full_details_list = asyncio.run(asyncio.gather(*tasks))
+
+    # full_details_list = []
+    # for doctor in filtered_list:
+    #     full_details_list.append(get_doctor_details(doctor["url"]))
+    # full_details_list = [item for item in full_details_list if item]
+    try:
+        loop = asyncio.get_running_loop()
+        asyncio.set_event_loop(loop)
+        full_details_list = loop.run_until_complete(asyncio.gather(*tasks))
+    except Exception as e:
+        full_details_list = asyncio.run(asyncio.gather(*tasks))
+    
+    print(f"Full details list: {len(full_details_list)}")
+
+    for i, doctor in enumerate(filtered_list):
+        doctor["biography_text"] = full_details_list[i]["doctor"]["biography_text"]
+    print(f"Filtered list: {len(filtered_list)}")
+    
+    # feedbacks_summaries = []
+    # for doctor in full_details_list:
+    #     feedbacks_summaries.append(
+    #         llm_model.invoke(
+    #             [
+    #                 SystemMessage(content="You are a critical thinker and professional summarizer. summarize the feedbacks of the doctor into a single paragraph."),
+    #                 HumanMessage(content="\n".join([f"{index}: {feedback["description"]}" for index, feedback in enumerate(doctor["feedbacks"]["feedbacks"]["list"][:5], start=1)])),
+    #             ]
+    #         )
+    #     )
+    tasks = []
+    for doctor in full_details_list:
+        tasks.append(llm_model.ainvoke(
+                [
+                    SystemMessage(content="You are a critical thinker and professional summarizer. summarize the feedbacks of the doctor into a single persian paragraph."),
+                    HumanMessage(content="\n".join([f"{index}: {feedback["description"]}" for index, feedback in enumerate(doctor["feedbacks"]["feedbacks"]["list"][:5], start=1)])),
+                ]
+            ))
+    feedbacks_summaries = asyncio.run(asyncio.gather(*tasks))
+    # try:
+    #     feedbacks_summaries = asyncio.run(asyncio.gather(*tasks))
+    # except Exception as e:
+    #     loop = asyncio.get_running_loop()
+    #     asyncio.set_event_loop(loop)
+    #     feedbacks_summaries = loop.run_until_complete(asyncio.gather(*tasks))
+        
+    # add the summarized feedbacks to each doctor in the filtered list
+    print(f"Feedbacks summaries: {len(feedbacks_summaries)}")
+    for i, doctor in enumerate(filtered_list):
+        doctor["feedbacks_summary"] = feedbacks_summaries[i].content
+    with open("filtered_list.json", "w", encoding="utf-8") as f:
+        import json
+        json.dump(filtered_list, f, ensure_ascii=False, indent=4)
+    return filtered_list
 
 
 
-llm_model = ChatOpenAI(model_name="google/gemini-2.5-flash-preview-05-20", openai_api_base=LLM_BASE_URL, openai_api_key=OPENROUTER_API_KEY, temperature=0)
+
 
 
 def export_conversation_history_to_string(
