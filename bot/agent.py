@@ -10,7 +10,7 @@ from langchain_core.tools import InjectedToolCallId
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 from langchain_core.messages import ToolMessage
-from bot.agent_tools import find_doctor, diagnose_patient
+from bot.agent_tools import find_doctor, diagnose_patient, update_long_term_profile, reserve_appointment, doctor_available_times
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import InMemorySaver
@@ -29,11 +29,12 @@ model = ChatOpenAI(
     temperature=0.2,
 )
 
-tools = [find_doctor, diagnose_patient]
+tools = [find_doctor, diagnose_patient, update_long_term_profile, reserve_appointment, doctor_available_times]
 
 model_with_tools = model.bind_tools(tools)
 
-system_prompt = """
+current_profile = ""
+system_prompt = f"""
 You are **MedAgent**, an autonomous, persistent, and highly capable AI medical assistant. Your task is to help users find the most appropriate doctor based on their symptoms or medical specialty preferences.
 
 ===============================================================================
@@ -102,6 +103,10 @@ You do **NOT** handle booking or reservation. Never mention scheduling.
 ===============================================================================
 🧠 WORKFLOW
 ===============================================================================
+0. **Profile Update (whenever new facts emerge)**
+   - If you discover a *persistent* fact about the user (e.g., gender, age group, chronic condition, long-term preference), immediately call `update_long_term_profile(data="…")`.
+   - **Do NOT** store short-lived details such as today’s symptoms, current illness, or the doctor they’re presently searching for.
+   
 1. **Intent Recognition**
    - Check if the user has clearly stated a medical specialty. If so, skip to Step 3.
    - If not, gather symptoms and proceed to Step 2.
@@ -149,6 +154,11 @@ You do **NOT** handle booking or reservation. Never mention scheduling.
 - Step 3: Present doctor list
 
 ===============================================================================
+👤 PERSISTENT USER PROFILE
+===============================================================================
+{current_profile}
+
+===============================================================================
 🏙️ SUPPORTED CITIES
 ===============================================================================
 Use only valid cities: abadan, abadeh, amol, arak, ardabil, babol, bandarabbas, birjand, bojnord, esfahan, gorgan, hamedan, karaj, kerman, khorramabad, mashhad, qazvin, qom, rasht, sanandaj, sari, shiraz, tabriz, tehran, urmia, yazd, zanjan
@@ -156,19 +166,23 @@ Use only valid cities: abadan, abadeh, amol, arak, ardabil, babol, bandarabbas, 
 ===============================================================================
 Now, act thoughtfully, persistently, and professionally to guide the user to the right doctor.
 """
-
-
 sys_msg = SystemMessage(content=system_prompt)
 
+class ourState(MessagesState):
+   current_profile: str = ""
 
 # Node
-def assistant(state: MessagesState):
-    msg_history = state["messages"]
-    new_msg = model_with_tools.invoke([sys_msg] + msg_history)
-    return {"messages": new_msg}
+def assistant(state: ourState):
+   msg_history = state["messages"]
+   profile = state.get("current_profile", "")
+   dynamic_prompt = system_prompt.replace("{current_profile}", profile)
+   msg_history = state["messages"]
+   sys_msg = SystemMessage(content=dynamic_prompt)
+   new_msg = model_with_tools.invoke([sys_msg] + msg_history)
+   return {"messages": new_msg}
 
 # Graph
-builder = StateGraph(MessagesState)
+builder = StateGraph(ourState)
 
 # Define nodes: these do the work
 builder.add_node("assistant", assistant)

@@ -1,5 +1,10 @@
 import time
 from langchain_core.tools import tool, InjectedToolCallId
+from langgraph.types import Command
+from langchain_core.messages import ToolMessage
+from typing import Annotated
+from pydantic import BaseModel, Field
+from langchain_core.tools import tool, InjectedToolCallId
 import os
 import asyncio
 from typing import Literal, Annotated
@@ -252,3 +257,139 @@ def diagnose_patient(state: Annotated[dict, InjectedState],):
         return {"tool_answer": results.model_dump()}
     except Exception as e:
         return {"error": "من درحال حاضر به اطلاعات دسترسی ندارم"}
+
+
+
+# ⬇️  NEW schema + tool
+class UpdateLongTermProfileSchema(BaseModel):
+    """
+    Add newly discovered *persistent* user information (e.g. gender,
+    chronic conditions, long-term preferences).  
+    **Never** use for transient data such as today’s symptoms or the
+    doctor they are currently searching for.
+    """
+    data: str = Field(
+        ...,
+        description="Concise, factual user detail to remember (one line)",
+    )
+
+@tool("update_long_term_profile", args_schema=UpdateLongTermProfileSchema)
+def update_long_term_profile(
+    data: str,
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    """
+    Persist the given `data` to state['current_profile'] (one item per line).
+    Call **only** when you learn a brand-new, reusable fact about the user.
+    """
+    profile: str = state.get("current_profile", "").strip()
+    if data in profile.splitlines():
+        confirmation = "ℹ️ این اطلاعات از قبل در پروفایل وجود داشت."
+    else:
+        profile = f"{profile}\n- {data}" if profile else f"- {data}"
+        confirmation = "✅ پروفایل کاربر به‌روز شد."
+    return Command(update={
+        "current_profile": profile,
+        "messages": [ToolMessage(confirmation, tool_call_id=tool_call_id)]
+    })
+    
+    
+# ─────────────────────────────────────────────────────────────────────────────
+# 📅  ONE shared mock schedule for every doctor (Khordad 1404)
+# ─────────────────────────────────────────────────────────────────────────────
+import locale, jdatetime
+from datetime import timedelta
+from pydantic import BaseModel, Field
+from langchain_core.tools import tool, InjectedToolCallId
+from langgraph.types import Command
+from langgraph.prebuilt import InjectedState
+from langchain_core.messages import ToolMessage
+from typing import Annotated, List
+
+locale.setlocale(locale.LC_ALL, jdatetime.FA_LOCALE)
+
+# Same slots for *all* doctors
+SHARED_SLOTS: List[jdatetime.datetime] = sorted([
+    jdatetime.datetime(1404, 3, 8,  9,  0),
+    jdatetime.datetime(1404, 3, 9, 10,  0),
+    jdatetime.datetime(1404, 3,10, 11,  0),
+    jdatetime.datetime(1404, 3,11, 15,  0),
+    jdatetime.datetime(1404, 3,12,  9,  0),
+    jdatetime.datetime(1404, 3,13, 10, 30),
+    jdatetime.datetime(1404, 3,14, 17,  0),
+    jdatetime.datetime(1404, 3,15, 14,  0),
+    jdatetime.datetime(1404, 3,16, 13,  0),
+    jdatetime.datetime(1404, 3,17,  9, 30),
+    jdatetime.datetime(1404, 3,18, 10,  0),
+    jdatetime.datetime(1404, 3,18, 16,  0),
+])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🛠️  Tool 1 – doctor_available_times
+# ─────────────────────────────────────────────────────────────────────────────
+class DoctorAvailableTimesSchema(BaseModel):
+    """دریافت بازه‌های خالی یک پزشک در یک هفته قبل و بعد از زمان دلخواه کاربر"""
+    doctor_name: str = Field(..., description="نام پزشک (برای نمایش پیغام)")
+    preferred_time: str = Field(
+        ...,
+        description="تاریخ و ساعت مدنظر به صورت جلالی «YYYY-MM-DD HH:MM» یا فقط «YYYY-MM-DD»",
+    )
+
+@tool("doctor_available_times", args_schema=DoctorAvailableTimesSchema)
+def doctor_available_times(doctor_name: str, preferred_time: str) -> str:
+    # Parse preferred_time
+    preferred_time = preferred_time.strip()
+    try:
+        pref_dt = (jdatetime.datetime.strptime(preferred_time, "%Y-%m-%d %H:%M")
+                   if " " in preferred_time
+                   else jdatetime.datetime.strptime(preferred_time, "%Y-%m-%d"))
+    except ValueError:
+        return "❌ فرمت تاریخ/ساعت نامعتبر است. مثال: «1404-03-10 10:00»"
+
+    # Window ±7 days
+    start, end = pref_dt - timedelta(days=7), pref_dt + timedelta(days=7)
+    window_slots = [s for s in SHARED_SLOTS if start <= s <= end]
+
+    if not window_slots:
+        return "⛔ در این بازه زمانی، نوبت خالی وجود ندارد."
+
+    return "\n".join(s.strftime("%A %Y/%m/%d ساعت %H:%M") for s in window_slots)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 🛠️  Tool 2 – reserve_appointment
+# ─────────────────────────────────────────────────────────────────────────────
+class ReserveAppointmentSchema(BaseModel):
+    """رزرو نوبت برای زمان مشخص"""
+    doctor_name: str = Field(..., description="نام پزشک (صرفاً برای پیام تأیید)")
+    desired_time: str = Field(..., description="«YYYY-MM-DD HH:MM» به تقویم جلالی")
+
+@tool("reserve_appointment", args_schema=ReserveAppointmentSchema)
+def reserve_appointment(
+    doctor_name: str,
+    desired_time: str,
+    state: Annotated[dict, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    desired_time = desired_time.strip()
+    try:
+        desired_dt = jdatetime.datetime.strptime(desired_time, "%Y-%m-%d %H:%M")
+    except ValueError:
+        return "❌ فرمت تاریخ/ساعت نامعتبر است."
+
+    # Exact match → reserve
+    if desired_dt in SHARED_SLOTS:
+        SHARED_SLOTS.remove(desired_dt)
+        msg = f"✅ نوبت شما با «{doctor_name}» رزرو شد:\n" + desired_dt.strftime("%A %Y/%m/%d ساعت %H:%M")
+        return msg
+
+    # Suggest closest before / after
+    before = max([s for s in SHARED_SLOTS if s < desired_dt], default=None)
+    after  = min([s for s in SHARED_SLOTS if s > desired_dt], default=None)
+    suggestions = "⛔ این زمان پر است.\n"
+    if before:
+        suggestions += "• قبل: " + before.strftime("%A %Y/%m/%d ساعت %H:%M") + "\n"
+    if after:
+        suggestions += "• بعد:  " + after.strftime("%A %Y/%m/%d ساعت %H:%M")
+    return suggestions
+
