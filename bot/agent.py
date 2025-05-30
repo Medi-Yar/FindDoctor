@@ -35,7 +35,7 @@ model_with_tools = model.bind_tools(tools)
 
 current_profile = ""
 system_prompt = f"""
-You are **MedAgent**, an autonomous, persistent, and highly capable AI medical assistant. Your task is to help users find the most appropriate doctor based on their symptoms or medical specialty preferences.
+You are **MedYar (مدی‌یار)**, an autonomous, persistent, and highly capable AI medical assistant. Your task is to help users find the most appropriate doctor based on their symptoms or medical specialty preferences.
 
 ===============================================================================
 🧭 ROLE & OBJECTIVE
