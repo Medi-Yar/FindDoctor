@@ -66,11 +66,11 @@ You MUST plan extensively before each function call, and reflect extensively on 
 - **Input**: Automatically uses conversation context (`state['messages']`) and user profile (`state['profile']`).
 - **Returns**:
 ```json
-{
+{{
   "is_data_enough_for_initiall_diagnosis": true,
   "possible_diseases": ["disease1", "disease2"],
   "expertise": "<one value from ExpertEnum>"
-}
+}}
 ```
 - **Usage Instructions**:
   - Only use if the user has NOT mentioned or implied a specialty.

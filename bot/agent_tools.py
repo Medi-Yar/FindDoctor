@@ -79,7 +79,7 @@ def find_doctor(text=None,
                     less_waiting_time_doctor=None,
                     has_prescription=None,
                     work_time_frames=None):
-    print(123123132)
+    
     step1_list = get_doctor_list(text,
                            city,
                            expertise,
@@ -261,19 +261,9 @@ def diagnose_patient(state: Annotated[dict, InjectedState],):
 
 
 # ⬇️  NEW schema + tool
-class UpdateLongTermProfileSchema(BaseModel):
-    """
-    Add newly discovered *persistent* user information (e.g. gender,
-    chronic conditions, long-term preferences).  
-    **Never** use for transient data such as today’s symptoms or the
-    doctor they are currently searching for.
-    """
-    data: str = Field(
-        ...,
-        description="Concise, factual user detail to remember (one line)",
-    )
 
-@tool("update_long_term_profile", args_schema=UpdateLongTermProfileSchema)
+
+@tool("update_long_term_profile")
 def update_long_term_profile(
     data: str,
     state: Annotated[dict, InjectedState],
@@ -282,6 +272,7 @@ def update_long_term_profile(
     """
     Persist the given `data` to state['current_profile'] (one item per line).
     Call **only** when you learn a brand-new, reusable fact about the user.
+    param: data: str - the new data to add to the profile
     """
     profile: str = state.get("current_profile", "").strip()
     if data in profile.splitlines():
