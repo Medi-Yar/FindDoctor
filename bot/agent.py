@@ -1,7 +1,6 @@
 from langgraph.graph import MessagesState
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
-
 from langgraph.graph import START, StateGraph
 from langgraph.prebuilt import tools_condition
 from langgraph.prebuilt import ToolNode
@@ -158,7 +157,7 @@ Now, act thoughtfully, persistently, and professionally to guide the user to the
 """
 
 
-sys_msg = SystemMessage(content=sys_prompt)
+sys_msg = SystemMessage(content=system_prompt)
 
 
 # Node

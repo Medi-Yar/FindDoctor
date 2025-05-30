@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "agent": ".bot/agent.py:react_graph_no_memory"
+    "agent": "bot/agent.py:react_graph_no_memory"
   },
   "env": ".env"
 }

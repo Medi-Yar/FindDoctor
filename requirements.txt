@@ -5,3 +5,7 @@ langchain-community
 chainlit
 langgraph-cli
 python-dotenv
+langchain-core
+langchain
+aiohttp
+bs4
