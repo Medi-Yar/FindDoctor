@@ -365,12 +365,8 @@ class ReserveAppointmentSchema(BaseModel):
     desired_time: str = Field(..., description="«YYYY-MM-DD HH:MM» به تقویم جلالی")
 
 @tool("reserve_appointment", args_schema=ReserveAppointmentSchema)
-def reserve_appointment(
-    doctor_name: str,
-    desired_time: str,
-    state: Annotated[dict, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
-) -> Command:
+def reserve_appointment(doctor_name: str, desired_time: str) -> str:
+    """Reserve an appointment for the given doctor at the specified Jalali date and time."""
     desired_time = desired_time.strip()
     try:
         desired_dt = jdatetime.datetime.strptime(desired_time, "%Y-%m-%d %H:%M")
