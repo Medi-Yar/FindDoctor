@@ -151,7 +151,7 @@ def simplify_doctor_data(data):
         appointment_time = None
         for action in actions:
             if "ویزیت آنلاین" in action.get("title", ""):
-                online_visit_url = action.get("url")
+                online_visit_url = "https://www.paziresh24.com" + action.get("url")
             if "نوبت‌دهی" in action.get("title", ""):
                 # Extract first appointment time if available
                 top_title = action.get("top_title", "")

@@ -23,7 +23,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 # Initialize model with tool support
 # model = ChatOpenAI(model="gpt-4o", temperature=0)
 model = ChatOpenAI(
-    model_name="openai/gpt-4.1-mini",
+    model_name="openai/gpt-4.1",
     openai_api_base=LLM_BASE_URL,
     openai_api_key=OPENROUTER_API_KEY,
     temperature=0.2,
@@ -79,8 +79,9 @@ You MUST plan extensively before each function call, and reflect extensively on 
 ### Tool 2: find_doctor(...)
 - **Purpose**: Find doctors matching the user's preferences and filters.
 - **Core Tool**: This is the most important tool. You may call it multiple times with updated parameters until the user is satisfied.
-- **Parameters**: 
+- **Parameters (All Optional)**: 
   (e.g., `text`, `city`, `expertise`, `sub_expertise`, `doctor_gender`, `degree`, `results_type`, `turn_type`, etc.)
+  if user is in emergency or time is vital, dont try to get all parameters values, go with no parameters.
 - **Usage Instructions**:
   - Confirm `city` and `expertise` before calling.
   - Adjust filters based on user feedback (e.g., try different gender, area, sub_expertise).

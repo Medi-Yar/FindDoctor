@@ -133,7 +133,7 @@ def find_doctor(text=None,
         tasks.append(llm_model.ainvoke(
                 [
                     SystemMessage(content="You are a critical thinker and professional summarizer. summarize the feedbacks of the doctor into a single persian paragraph."),
-                    HumanMessage(content="\n".join([f"{index}: {feedback["description"]}" for index, feedback in enumerate(doctor["feedbacks"]["feedbacks"]["list"][:5], start=1)])),
+                    HumanMessage(content="\n".join([f"{index}: {feedback["description"]}" for index, feedback in enumerate(doctor["feedbacks"]["feedbacks"].get("list", [])[:5], start=1)])),
                 ]
             ))
     feedbacks_summaries = asyncio.run(asyncio.gather(*tasks))
